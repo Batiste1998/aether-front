@@ -33,7 +33,7 @@ export default function Login() {
   return (
     <div className="mx-auto flex min-h-full max-w-sm flex-col justify-center px-6">
       <Link to="/" className="mb-6 text-center text-sm text-parch/50 hover:text-parch">
-        ← Chroniques d'Æther
+        ← Quiz d'Æther
       </Link>
       <Card>
         <h1 className="mb-4 text-center text-2xl text-white">Connexion</h1>

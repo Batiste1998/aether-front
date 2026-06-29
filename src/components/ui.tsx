@@ -1,4 +1,37 @@
 import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
+import { useAuth } from '../store/auth'
+
+export function Header() {
+  const navigate = useNavigate()
+  const { user, logout } = useAuth()
+  return (
+    <header className="flex items-center justify-between border-b border-white/10 px-6 py-4">
+      <Link to="/dashboard" className="font-serif text-lg text-gold-soft">
+        ✦ Quiz d'Æther
+      </Link>
+      <nav className="flex items-center gap-5 text-sm text-parch/60">
+        <Link to="/dashboard" className="hover:text-parch">
+          Jouer
+        </Link>
+        <Link to="/classement" className="hover:text-parch">
+          Classement
+        </Link>
+        <span className="text-parch/40">·</span>
+        <span className="text-parch/80">{user?.pseudo}</span>
+        <button
+          onClick={() => {
+            logout()
+            navigate('/')
+          }}
+          className="hover:text-parch"
+        >
+          Déconnexion
+        </button>
+      </nav>
+    </header>
+  )
+}
 
 export function Button({
   variant = 'primary',

@@ -1,6 +1,6 @@
 # aether-front
 
-Frontend de **Chroniques d'Æther** — RPG textuel web dont le Maître du Jeu est propulsé par GPT-4o.
+Frontend de **Quiz d'Æther** — un jeu de quiz de culture générale dont les questions sont générées par GPT-4o.
 
 Stack : **React 19** · **TypeScript** · **Vite** · **Tailwind CSS** · React Router · TanStack Query · Zustand.
 
@@ -13,13 +13,10 @@ Stack : **React 19** · **TypeScript** · **Vite** · **Tailwind CSS** · React 
 
 ```bash
 npm install
-npm run dev
+npm run dev      # http://localhost:5173
 ```
 
-L'application est servie sur `http://localhost:5173`.
-
-L'URL de l'API peut être surchargée via la variable d'environnement `VITE_API_URL`
-(par défaut `http://localhost:8080`).
+`VITE_API_URL` permet de surcharger l'URL de l'API (défaut `http://localhost:8080`).
 
 ## Écrans
 
@@ -27,16 +24,27 @@ L'URL de l'API peut être surchargée via la variable d'environnement `VITE_API_
 |-------|-------|
 | `/` | Landing |
 | `/login`, `/register` | Authentification |
-| `/dashboard` | Mes personnages & mes parties |
-| `/personnages/nouveau` | Création de personnage |
-| `/parties/:id` | Écran de jeu (fil narratif, saisie d'action, panneau latéral) |
+| `/dashboard` | Lobby : choix du thème/catégorie, difficulté, nombre de questions |
+| `/quiz` | Partie en cours : chrono, choix, feedback, écran de résultats |
+| `/classement` | Classement des meilleurs scores |
 
 ## Structure
 
 ```
 src/
 ├── lib/api.ts        # client HTTP typé + types partagés avec l'API
+├── lib/stats.ts      # helpers purs (réussite, chrono) + tests
 ├── store/auth.ts     # store d'authentification (Zustand) + JWT
-├── components/ui.tsx # composants UI réutilisables
+├── components/ui.tsx # composants UI réutilisables (boutons, header…)
 └── pages/            # un fichier par écran
 ```
+
+## Qualité
+
+```bash
+npx tsc --noEmit
+npm test            # vitest
+npm run build
+```
+
+CI GitHub Actions à chaque push (typecheck, tests, build).

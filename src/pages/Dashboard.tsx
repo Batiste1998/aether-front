@@ -1,124 +1,183 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Link, useNavigate } from 'react-router-dom'
-import { api, type Partie, type Personnage } from '../lib/api'
-import { useAuth } from '../store/auth'
-import { Button } from '../components/ui'
+import { useState } from 'react'
+import { useMutation, useQuery } from '@tanstack/react-query'
+import { useNavigate } from 'react-router-dom'
+import {
+  api,
+  genererQuiz,
+  ApiError,
+  type Categorie,
+  type HistoryEntry,
+} from '../lib/api'
+import { Button, Header, Input } from '../components/ui'
+
+const DIFFICULTES = [
+  { val: 'facile', label: 'Facile' },
+  { val: 'moyen', label: 'Moyen' },
+  { val: 'difficile', label: 'Difficile' },
+]
 
 export default function Dashboard() {
   const navigate = useNavigate()
-  const qc = useQueryClient()
-  const { user, logout } = useAuth()
+  const [idCategorie, setIdCategorie] = useState<number | null>(null)
+  const [theme, setTheme] = useState('')
+  const [difficulte, setDifficulte] = useState('moyen')
+  const [nb, setNb] = useState(5)
+  const [error, setError] = useState<string | null>(null)
 
-  const persos = useQuery({
-    queryKey: ['personnages'],
-    queryFn: () => api<Personnage[]>('/personnages'),
-  })
-  const parties = useQuery({
-    queryKey: ['parties'],
-    queryFn: () => api<Partie[]>('/parties'),
+  const categories = useQuery({ queryKey: ['categories'], queryFn: () => api<Categorie[]>('/categories') })
+  const historique = useQuery({ queryKey: ['historique'], queryFn: () => api<HistoryEntry[]>('/sessions') })
+
+  const lancer = useMutation({
+    mutationFn: () =>
+      genererQuiz({
+        id_categorie: theme.trim() ? undefined : idCategorie ?? undefined,
+        theme: theme.trim() || undefined,
+        difficulte,
+        nb_questions: nb,
+      }),
+    onSuccess: (session) => navigate('/quiz', { state: { session } }),
+    onError: (e) => setError(e instanceof ApiError ? e.message : 'Génération impossible'),
   })
 
-  const startPartie = useMutation({
-    mutationFn: (id_personnage: number) =>
-      api<Partie>('/parties', { method: 'POST', body: JSON.stringify({ id_personnage }) }),
-    onSuccess: (p) => {
-      qc.invalidateQueries({ queryKey: ['parties'] })
-      navigate(`/parties/${p.id_partie}`)
-    },
-  })
-
-  const nomPerso = (id: number) =>
-    persos.data?.find((p) => p.id_personnage === id)?.nom ?? `Personnage #${id}`
+  function onLancer() {
+    setError(null)
+    if (!theme.trim() && idCategorie === null) {
+      setError('Choisis une catégorie ou saisis un thème.')
+      return
+    }
+    lancer.mutate()
+  }
 
   return (
     <div className="min-h-full">
-      <header className="flex items-center justify-between border-b border-white/10 px-6 py-4">
-        <Link to="/" className="font-serif text-lg text-gold-soft">
-          ✦ Chroniques d'Æther
-        </Link>
-        <div className="flex items-center gap-4 text-sm text-parch/60">
-          <span>{user?.pseudo}</span>
-          <button
-            onClick={() => {
-              logout()
-              navigate('/')
-            }}
-            className="hover:text-parch"
-          >
-            Déconnexion
-          </button>
-        </div>
-      </header>
+      <Header />
+      <main className="mx-auto max-w-4xl px-6 py-8">
+        <h1 className="text-3xl text-white">Lance un quiz</h1>
+        <p className="mt-1 text-parch/60">
+          Choisis un thème, l'IA génère les questions. Réponds vite pour scorer plus !
+        </p>
 
-      <main className="mx-auto max-w-5xl px-6 py-8">
-        <section className="mb-10">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-2xl text-white">Mes personnages</h2>
-            <Link to="/personnages/nouveau">
-              <Button variant="gold">+ Nouveau personnage</Button>
-            </Link>
+        {/* Catégories */}
+        <h2 className="mb-3 mt-8 text-xs uppercase tracking-wide text-white/40">Catégorie</h2>
+        {categories.isLoading ? (
+          <p className="text-parch/50">Chargement…</p>
+        ) : categories.isError ? (
+          <div className="flex items-center gap-3 rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-400">
+            <span>Impossible de charger les catégories. L'API est-elle démarrée ?</span>
+            <button
+              onClick={() => categories.refetch()}
+              className="rounded border border-red-400/50 px-2 py-0.5 text-xs hover:bg-red-500/20"
+            >
+              Réessayer
+            </button>
           </div>
+        ) : (
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {categories.data?.map((c) => {
+              const selected = idCategorie === c.id_categorie && !theme.trim()
+              return (
+                <button
+                  key={c.id_categorie}
+                  onClick={() => {
+                    setIdCategorie(c.id_categorie)
+                    setTheme('')
+                  }}
+                  className={`rounded-xl border p-4 text-left transition ${
+                    selected
+                      ? 'border-arcane bg-arcane/15'
+                      : 'border-white/10 bg-panel/40 hover:border-white/30'
+                  }`}
+                >
+                  <div className="text-2xl">{c.emoji}</div>
+                  <div className="mt-1 text-sm text-white">{c.libelle}</div>
+                </button>
+              )
+            })}
+          </div>
+        )}
 
-          {persos.isLoading ? (
-            <p className="text-parch/50">Chargement…</p>
-          ) : persos.data && persos.data.length > 0 ? (
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {persos.data.map((p) => (
-                <div key={p.id_personnage} className="rounded-xl border border-white/10 bg-panel/60 p-5">
-                  <div className="flex items-baseline justify-between">
-                    <h3 className="text-lg text-white">{p.nom}</h3>
-                    <span className="text-xs text-gold-soft">Niv. {p.niveau}</span>
-                  </div>
-                  <p className="text-sm text-arcane">{p.classe_nom}</p>
-                  <p className="mt-2 text-xs text-parch/50">
-                    PV {p.pv_actuels}/{p.pv_max} · {p.or_pieces} or · {p.xp} XP
-                  </p>
-                  <Button
-                    variant="primary"
-                    className="mt-4 w-full"
-                    disabled={startPartie.isPending}
-                    onClick={() => startPartie.mutate(p.id_personnage)}
-                  >
-                    Nouvelle aventure
-                  </Button>
+        {/* Thème libre */}
+        <div className="mt-6">
+          <label className="mb-1 block text-xs uppercase tracking-wide text-white/40">
+            …ou un thème personnalisé
+          </label>
+          <Input
+            value={theme}
+            onChange={(e) => {
+              setTheme(e.target.value)
+              if (e.target.value.trim()) setIdCategorie(null)
+            }}
+            placeholder="Ex : la mythologie grecque, le rap français, la conquête spatiale…"
+          />
+        </div>
+
+        {/* Difficulté + nombre */}
+        <div className="mt-6 flex flex-wrap gap-8">
+          <div>
+            <span className="mb-2 block text-xs uppercase tracking-wide text-white/40">Difficulté</span>
+            <div className="flex gap-2">
+              {DIFFICULTES.map((d) => (
+                <button
+                  key={d.val}
+                  onClick={() => setDifficulte(d.val)}
+                  className={`rounded-lg border px-4 py-2 text-sm transition ${
+                    difficulte === d.val
+                      ? 'border-gold bg-gold/15 text-gold-soft'
+                      : 'border-white/10 text-parch/70 hover:border-white/30'
+                  }`}
+                >
+                  {d.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <span className="mb-2 block text-xs uppercase tracking-wide text-white/40">Questions</span>
+            <div className="flex gap-2">
+              {[3, 5, 10].map((n) => (
+                <button
+                  key={n}
+                  onClick={() => setNb(n)}
+                  className={`rounded-lg border px-4 py-2 text-sm transition ${
+                    nb === n
+                      ? 'border-gold bg-gold/15 text-gold-soft'
+                      : 'border-white/10 text-parch/70 hover:border-white/30'
+                  }`}
+                >
+                  {n}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {error && <p className="mt-4 text-sm text-red-400">{error}</p>}
+
+        <Button variant="gold" className="mt-6 px-8 py-3 text-base" disabled={lancer.isPending} onClick={onLancer}>
+          {lancer.isPending ? 'Génération du quiz…' : 'Lancer le quiz →'}
+        </Button>
+
+        {/* Historique */}
+        {historique.data && historique.data.length > 0 && (
+          <section className="mt-12">
+            <h2 className="mb-3 text-xl text-white">Mes dernières parties</h2>
+            <div className="space-y-2">
+              {historique.data.slice(0, 8).map((h) => (
+                <div
+                  key={h.id_session}
+                  className="flex items-center justify-between rounded-lg border border-white/10 bg-panel/40 px-4 py-2 text-sm"
+                >
+                  <span className="text-parch/80">
+                    {h.theme} <span className="text-parch/40">· {h.difficulte}</span>
+                  </span>
+                  <span className="text-gold-soft">
+                    {h.termine ? `${h.score} pts` : 'inachevée'}
+                  </span>
                 </div>
               ))}
             </div>
-          ) : (
-            <p className="text-parch/50">
-              Aucun personnage pour l'instant. Créez votre héros pour commencer !
-            </p>
-          )}
-        </section>
-
-        <section>
-          <h2 className="mb-4 text-2xl text-white">Mes parties</h2>
-          {parties.isLoading ? (
-            <p className="text-parch/50">Chargement…</p>
-          ) : parties.data && parties.data.length > 0 ? (
-            <div className="space-y-2">
-              {parties.data.map((partie) => (
-                <Link
-                  key={partie.id_partie}
-                  to={`/parties/${partie.id_partie}`}
-                  className="flex items-center justify-between rounded-lg border border-white/10 bg-panel/40 px-4 py-3 hover:border-arcane"
-                >
-                  <div>
-                    <span className="text-parch">{partie.titre}</span>
-                    <span className="ml-2 text-xs text-parch/40">
-                      — {nomPerso(partie.id_personnage)}
-                    </span>
-                  </div>
-                  <span className="text-xs uppercase tracking-wide text-gold-soft">
-                    {partie.statut === 'en_cours' ? 'Reprendre →' : partie.statut}
-                  </span>
-                </Link>
-              ))}
-            </div>
-          ) : (
-            <p className="text-parch/50">Aucune aventure commencée.</p>
-          )}
-        </section>
+          </section>
+        )}
       </main>
     </div>
   )

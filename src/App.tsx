@@ -5,8 +5,8 @@ import Landing from './pages/Landing'
 import Login from './pages/Login'
 import Register from './pages/Register'
 import Dashboard from './pages/Dashboard'
-import CreatePersonnage from './pages/CreatePersonnage'
-import Game from './pages/Game'
+import Quiz from './pages/Quiz'
+import Leaderboard from './pages/Leaderboard'
 
 function Protected({ children }: { children: ReactNode }) {
   const isAuth = useAuth((s) => s.isAuthenticated)
@@ -28,18 +28,18 @@ export default function App() {
         }
       />
       <Route
-        path="/personnages/nouveau"
+        path="/quiz"
         element={
           <Protected>
-            <CreatePersonnage />
+            <Quiz />
           </Protected>
         }
       />
       <Route
-        path="/parties/:id"
+        path="/classement"
         element={
           <Protected>
-            <Game />
+            <Leaderboard />
           </Protected>
         }
       />

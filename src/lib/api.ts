@@ -57,107 +57,93 @@ export interface AuthResponse {
   utilisateur: Utilisateur
 }
 
-export interface Personnage {
-  id_personnage: number
-  nom: string
-  niveau: number
-  xp: number
-  pv_actuels: number
-  pv_max: number
-  or_pieces: number
-  histoire: string | null
-  created_at: string
-  id_classe: number
-  classe_nom: string
-}
-
-export interface Partie {
-  id_partie: number
-  titre: string
-  statut: string
-  theme: string | null
-  created_at: string
-  updated_at: string
-  id_personnage: number
-}
-
-export interface Tour {
-  id_tour: number
-  numero: number
-  action_joueur: string | null
-  narration_ia: string
-  etat_jeu: unknown
-  created_at: string
-}
-
-export interface Quete {
-  id_quete: number
-  titre: string
+export interface Categorie {
+  id_categorie: number
+  libelle: string
   description: string | null
-  statut: string
-  recompense_xp: number
-  recompense_or: number
+  emoji: string | null
 }
 
-export interface Pnj {
-  id_pnj: number
-  nom: string
-  description: string | null
-  attitude: string | null
+export interface ChoixPublic {
+  id_choix: number
+  position: number
+  texte: string
 }
 
-export interface InventaireItem {
-  id_objet: number
-  nom: string
-  type_objet: string
-  description: string | null
-  effet: string | null
-  quantite: number
-  equipe: boolean
+export interface QuestionPublic {
+  id_question: number
+  position: number
+  intitule: string
+  choix: ChoixPublic[]
 }
 
-export interface PartieDetail extends Partie {
-  tours: Tour[]
-  quetes: Quete[]
-  pnj: Pnj[]
-  inventaire: InventaireItem[]
+export interface QuizSession {
+  id_session: number
+  id_quiz: number
+  theme: string
+  difficulte: string
+  temps_par_question_ms: number
+  questions: QuestionPublic[]
 }
 
-export interface De {
-  raison: string
-  de: string
-  resultat: number
-  reussite: boolean
+export interface AnswerResponse {
+  correcte: boolean
+  id_choix_correct: number
+  explication: string | null
+  points: number
+  score_total: number
+  serie_actuelle: number
+  nb_bonnes: number
 }
 
-export interface TourResponse {
-  numero: number
-  narration: string
-  jets_de_des: De[]
-  personnage: {
-    niveau: number
-    xp: number
-    pv_actuels: number
-    pv_max: number
-    or_pieces: number
-  }
+export interface FinishResponse {
+  score: number
+  nb_bonnes: number
+  serie_max: number
+  total_questions: number
+  rang: number
 }
 
-export interface UtiliserResponse {
-  pv_actuels: number
-  pv_max: number
-  soin: number
+export interface LeaderboardEntry {
+  pseudo: string
+  theme: string
+  difficulte: string
+  score: number
+  nb_bonnes: number
+  created_at: string
 }
 
-/** Équipe ou retire un objet de l'inventaire d'un personnage. */
-export function equiperObjet(pid: number, oid: number, equipe: boolean): Promise<void> {
-  return api<void>(`/personnages/${pid}/inventaire/${oid}/equiper`, {
+export interface HistoryEntry {
+  id_session: number
+  theme: string
+  difficulte: string
+  score: number
+  nb_bonnes: number
+  termine: boolean
+  created_at: string
+}
+
+export interface GenerateParams {
+  id_categorie?: number
+  theme?: string
+  difficulte: string
+  nb_questions: number
+}
+
+export function genererQuiz(params: GenerateParams): Promise<QuizSession> {
+  return api<QuizSession>('/quiz', { method: 'POST', body: JSON.stringify(params) })
+}
+
+export function repondre(
+  idSession: number,
+  body: { id_question: number; id_choix: number | null; temps_ms: number },
+): Promise<AnswerResponse> {
+  return api<AnswerResponse>(`/sessions/${idSession}/answers`, {
     method: 'POST',
-    body: JSON.stringify({ equipe }),
+    body: JSON.stringify(body),
   })
 }
 
-/** Consomme un objet (potion…) et renvoie les PV mis à jour. */
-export function utiliserObjet(pid: number, oid: number): Promise<UtiliserResponse> {
-  return api<UtiliserResponse>(`/personnages/${pid}/inventaire/${oid}/utiliser`, { method: 'POST' })
+export function terminerSession(idSession: number): Promise<FinishResponse> {
+  return api<FinishResponse>(`/sessions/${idSession}/finish`, { method: 'POST' })
 }
