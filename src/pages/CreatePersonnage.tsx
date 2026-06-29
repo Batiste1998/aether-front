@@ -63,9 +63,22 @@ export default function CreatePersonnage() {
           <span className="mb-2 block text-xs uppercase tracking-wide text-white/40">Classe</span>
           {classes.isLoading ? (
             <p className="text-parch/50">Chargement…</p>
+          ) : classes.isError ? (
+            <div className="flex items-center gap-3 rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-400">
+              <span>Impossible de charger les classes. L'API est-elle bien démarrée ?</span>
+              <button
+                type="button"
+                onClick={() => classes.refetch()}
+                className="rounded border border-red-400/50 px-2 py-0.5 text-xs hover:bg-red-500/20"
+              >
+                Réessayer
+              </button>
+            </div>
+          ) : !classes.data || classes.data.length === 0 ? (
+            <p className="text-sm text-parch/50">Aucune classe disponible.</p>
           ) : (
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-              {classes.data?.map((c) => {
+              {classes.data.map((c) => {
                 const selected = idClasse === c.id_classe
                 return (
                   <button
