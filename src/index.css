@@ -1,0 +1,33 @@
+@import "tailwindcss";
+
+@theme {
+  --color-ink: #14101f;
+  --color-ink-soft: #1f1830;
+  --color-panel: #221a36;
+  --color-arcane: #7c5cd6;
+  --color-arcane-deep: #2a1a55;
+  --color-gold: #c9a227;
+  --color-gold-soft: #d9b85a;
+  --color-parch: #ece6f5;
+
+  --font-serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background:
+    radial-gradient(80% 50% at 50% 0%, rgba(124, 92, 214, 0.18), transparent 70%),
+    var(--color-ink);
+  color: var(--color-parch);
+  font-family: -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+}
+
+h1, h2, h3 {
+  font-family: var(--font-serif);
+}
