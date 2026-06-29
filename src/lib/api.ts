@@ -142,3 +142,22 @@ export interface TourResponse {
     or_pieces: number
   }
 }
+
+export interface UtiliserResponse {
+  pv_actuels: number
+  pv_max: number
+  soin: number
+}
+
+/** Équipe ou retire un objet de l'inventaire d'un personnage. */
+export function equiperObjet(pid: number, oid: number, equipe: boolean): Promise<void> {
+  return api<void>(`/personnages/${pid}/inventaire/${oid}/equiper`, {
+    method: 'POST',
+    body: JSON.stringify({ equipe }),
+  })
+}
+
+/** Consomme un objet (potion…) et renvoie les PV mis à jour. */
+export function utiliserObjet(pid: number, oid: number): Promise<UtiliserResponse> {
+  return api<UtiliserResponse>(`/personnages/${pid}/inventaire/${oid}/utiliser`, { method: 'POST' })
+}

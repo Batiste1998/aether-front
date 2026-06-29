@@ -3,11 +3,14 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useParams } from 'react-router-dom'
 import {
   api,
+  equiperObjet,
+  utiliserObjet,
   type De,
   type PartieDetail,
   type Personnage,
   type TourResponse,
 } from '../lib/api'
+import { pvPourcentage, xpVersProchainNiveau } from '../lib/stats'
 import { Button } from '../components/ui'
 
 interface Message {
@@ -44,9 +47,12 @@ export default function Game() {
   const [messages, setMessages] = useState<Message[]>([])
   const [stats, setStats] = useState<Stats | null>(null)
   const [pvDelta, setPvDelta] = useState<number | null>(null)
+  const [levelUp, setLevelUp] = useState<number | null>(null)
   const [action, setAction] = useState('')
   const seeded = useRef(false)
   const filRef = useRef<HTMLDivElement>(null)
+
+  const pid = partie.data?.id_personnage
 
   // Reconstruit le fil narratif initial une seule fois.
   useEffect(() => {
@@ -82,11 +88,27 @@ export default function Game() {
       }),
     onSuccess: (res) => {
       setMessages((m) => [...m, { role: 'mj', text: res.narration, des: res.jets_de_des }])
-      setPvDelta(stats ? res.personnage.pv_actuels - stats.pv_actuels : null)
+      if (stats) {
+        setPvDelta(res.personnage.pv_actuels - stats.pv_actuels)
+        if (res.personnage.niveau > stats.niveau) setLevelUp(res.personnage.niveau)
+      }
       setStats(res.personnage)
-      // Rafraîchit inventaire / quêtes / PNJ depuis le serveur.
       qc.invalidateQueries({ queryKey: ['partie', partieId] })
     },
+  })
+
+  const utiliser = useMutation({
+    mutationFn: (oid: number) => utiliserObjet(pid!, oid),
+    onSuccess: (res) => {
+      setStats((s) => (s ? { ...s, pv_actuels: res.pv_actuels } : s))
+      if (res.soin > 0) setPvDelta(res.soin)
+      qc.invalidateQueries({ queryKey: ['partie', partieId] })
+    },
+  })
+
+  const equiper = useMutation({
+    mutationFn: ({ oid, equipe }: { oid: number; equipe: boolean }) => equiperObjet(pid!, oid, equipe),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['partie', partieId] }),
   })
 
   // Auto-scroll vers le bas du fil.
@@ -96,6 +118,7 @@ export default function Game() {
 
   function envoyer(act: string) {
     if (jouer.isPending) return
+    setLevelUp(null)
     if (act) setMessages((m) => [...m, { role: 'joueur', text: act }])
     setAction('')
     jouer.mutate(act)
@@ -107,10 +130,10 @@ export default function Game() {
     if (act) envoyer(act)
   }
 
-  const pvPct = stats ? Math.max(0, Math.round((stats.pv_actuels / stats.pv_max) * 100)) : 0
   const quetes = partie.data?.quetes ?? []
   const inventaire = partie.data?.inventaire ?? []
   const pnj = partie.data?.pnj ?? []
+  const xpProg = stats ? xpVersProchainNiveau(stats.xp) : null
 
   return (
     <div className="flex h-full flex-col">
@@ -125,6 +148,14 @@ export default function Game() {
       <div className="mx-auto flex w-full max-w-6xl flex-1 gap-4 overflow-hidden px-4 py-4">
         {/* Fil narratif */}
         <div className="flex flex-1 flex-col">
+          {levelUp !== null && (
+            <div className="mb-3 flex items-center justify-between rounded-lg border border-gold/50 bg-gold/15 px-4 py-2 text-sm text-gold-soft">
+              <span>⭐ Niveau {levelUp} atteint ! Vos points de vie maximum augmentent.</span>
+              <button onClick={() => setLevelUp(null)} className="text-gold-soft/60 hover:text-gold-soft">
+                ✕
+              </button>
+            </div>
+          )}
           <div ref={filRef} className="flex-1 space-y-4 overflow-y-auto rounded-xl border border-white/10 bg-panel/30 p-4">
             {messages.length === 0 && !jouer.isPending && (
               <div className="flex h-full flex-col items-center justify-center text-center text-parch/50">
@@ -188,12 +219,19 @@ export default function Game() {
         <aside className="hidden w-72 shrink-0 flex-col gap-3 overflow-y-auto sm:flex">
           {/* Statistiques */}
           <div className="rounded-xl border border-white/10 bg-panel/50 p-4">
-            {stats ? (
+            {stats && xpProg ? (
               <>
                 <div className="flex items-baseline justify-between">
                   <span className="text-sm text-white">Niveau {stats.niveau}</span>
                   <span className="text-xs text-gold-soft">{stats.xp} XP</span>
                 </div>
+                <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-white/10">
+                  <div className="h-full bg-arcane transition-all" style={{ width: `${xpProg.pct}%` }} />
+                </div>
+                <p className="mt-0.5 text-right text-[10px] text-parch/40">
+                  {xpProg.actuel}/{xpProg.requis} vers niv. {stats.niveau + 1}
+                </p>
+
                 <div className="mt-3 flex items-center justify-between">
                   <span className="text-xs text-parch/50">Points de vie</span>
                   {pvDelta !== null && pvDelta !== 0 && (
@@ -203,7 +241,10 @@ export default function Game() {
                   )}
                 </div>
                 <div className="mt-1 h-2 w-full overflow-hidden rounded-full bg-white/10">
-                  <div className="h-full bg-red-500 transition-all" style={{ width: `${pvPct}%` }} />
+                  <div
+                    className="h-full bg-red-500 transition-all"
+                    style={{ width: `${pvPourcentage(stats.pv_actuels, stats.pv_max)}%` }}
+                  />
                 </div>
                 <p className="mt-1 text-xs text-parch/60">
                   {stats.pv_actuels} / {stats.pv_max}
@@ -219,15 +260,33 @@ export default function Game() {
           <div className="rounded-xl border border-white/10 bg-panel/50 p-4">
             <h3 className="mb-2 text-sm text-white">Inventaire</h3>
             {inventaire.length > 0 ? (
-              <ul className="space-y-1">
+              <ul className="space-y-1.5">
                 {inventaire.map((it) => (
-                  <li key={it.id_objet} className="flex items-center justify-between text-xs">
+                  <li key={it.id_objet} className="flex items-center justify-between gap-2 text-xs">
                     <span className="text-parch/80">
                       {it.nom}
                       {it.quantite > 1 && <span className="text-parch/40"> ×{it.quantite}</span>}
                       {it.equipe && <span className="ml-1 text-gold-soft">⚔</span>}
                     </span>
-                    <span className="text-parch/40">{it.type_objet}</span>
+                    {it.type_objet === 'consommable' ? (
+                      <button
+                        onClick={() => utiliser.mutate(it.id_objet)}
+                        disabled={utiliser.isPending}
+                        className="rounded border border-arcane/40 px-1.5 py-0.5 text-[10px] text-arcane hover:bg-arcane/10 disabled:opacity-50"
+                      >
+                        Utiliser
+                      </button>
+                    ) : it.type_objet === 'arme' || it.type_objet === 'armure' ? (
+                      <button
+                        onClick={() => equiper.mutate({ oid: it.id_objet, equipe: !it.equipe })}
+                        disabled={equiper.isPending}
+                        className="rounded border border-white/15 px-1.5 py-0.5 text-[10px] text-parch/70 hover:bg-white/5 disabled:opacity-50"
+                      >
+                        {it.equipe ? 'Retirer' : 'Équiper'}
+                      </button>
+                    ) : (
+                      <span className="text-[10px] text-parch/40">{it.type_objet}</span>
+                    )}
                   </li>
                 ))}
               </ul>
