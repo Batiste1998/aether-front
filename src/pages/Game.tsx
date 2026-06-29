@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
-import { useMutation, useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useParams } from 'react-router-dom'
 import {
   api,
@@ -24,9 +24,16 @@ interface Stats {
   or_pieces: number
 }
 
+const STATUT_QUETE: Record<string, string> = {
+  active: 'border-gold/40 bg-gold/10 text-gold-soft',
+  reussie: 'border-green-500/40 bg-green-500/10 text-green-400',
+  echouee: 'border-red-500/40 bg-red-500/10 text-red-400 line-through',
+}
+
 export default function Game() {
   const { id } = useParams()
   const partieId = Number(id)
+  const qc = useQueryClient()
 
   const partie = useQuery({
     queryKey: ['partie', partieId],
@@ -36,6 +43,7 @@ export default function Game() {
 
   const [messages, setMessages] = useState<Message[]>([])
   const [stats, setStats] = useState<Stats | null>(null)
+  const [pvDelta, setPvDelta] = useState<number | null>(null)
   const [action, setAction] = useState('')
   const seeded = useRef(false)
   const filRef = useRef<HTMLDivElement>(null)
@@ -74,7 +82,10 @@ export default function Game() {
       }),
     onSuccess: (res) => {
       setMessages((m) => [...m, { role: 'mj', text: res.narration, des: res.jets_de_des }])
+      setPvDelta(stats ? res.personnage.pv_actuels - stats.pv_actuels : null)
       setStats(res.personnage)
+      // Rafraîchit inventaire / quêtes / PNJ depuis le serveur.
+      qc.invalidateQueries({ queryKey: ['partie', partieId] })
     },
   })
 
@@ -96,7 +107,10 @@ export default function Game() {
     if (act) envoyer(act)
   }
 
-  const pvPct = stats ? Math.round((stats.pv_actuels / stats.pv_max) * 100) : 0
+  const pvPct = stats ? Math.max(0, Math.round((stats.pv_actuels / stats.pv_max) * 100)) : 0
+  const quetes = partie.data?.quetes ?? []
+  const inventaire = partie.data?.inventaire ?? []
+  const pnj = partie.data?.pnj ?? []
 
   return (
     <div className="flex h-full flex-col">
@@ -108,7 +122,7 @@ export default function Game() {
         <span className="w-20" />
       </header>
 
-      <div className="mx-auto flex w-full max-w-5xl flex-1 gap-4 overflow-hidden px-4 py-4">
+      <div className="mx-auto flex w-full max-w-6xl flex-1 gap-4 overflow-hidden px-4 py-4">
         {/* Fil narratif */}
         <div className="flex flex-1 flex-col">
           <div ref={filRef} className="flex-1 space-y-4 overflow-y-auto rounded-xl border border-white/10 bg-panel/30 p-4">
@@ -123,7 +137,7 @@ export default function Game() {
             {messages.map((m, i) =>
               m.role === 'mj' ? (
                 <div key={i} className="flex gap-3">
-                  <span className="mt-1 rounded-full bg-arcane px-2 py-0.5 text-xs text-white">MJ</span>
+                  <span className="mt-1 h-fit rounded-full bg-arcane px-2 py-0.5 text-xs text-white">MJ</span>
                   <div className="flex-1">
                     <p className="whitespace-pre-wrap leading-relaxed text-parch">{m.text}</p>
                     {m.des && m.des.length > 0 && (
@@ -131,9 +145,13 @@ export default function Game() {
                         {m.des.map((d, j) => (
                           <span
                             key={j}
-                            className="rounded-full border border-gold/40 bg-gold/10 px-2 py-0.5 text-xs text-gold-soft"
+                            className={`rounded-full border px-2 py-0.5 text-xs ${
+                              d.reussite
+                                ? 'border-green-500/40 bg-green-500/10 text-green-400'
+                                : 'border-red-500/40 bg-red-500/10 text-red-400'
+                            }`}
                           >
-                            🎲 {d.de} → {d.resultat} ({d.raison})
+                            🎲 {d.de} → {d.resultat} · {d.raison}
                           </span>
                         ))}
                       </div>
@@ -167,7 +185,8 @@ export default function Game() {
         </div>
 
         {/* Panneau latéral */}
-        <aside className="hidden w-64 shrink-0 flex-col gap-4 sm:flex">
+        <aside className="hidden w-72 shrink-0 flex-col gap-3 overflow-y-auto sm:flex">
+          {/* Statistiques */}
           <div className="rounded-xl border border-white/10 bg-panel/50 p-4">
             {stats ? (
               <>
@@ -175,9 +194,16 @@ export default function Game() {
                   <span className="text-sm text-white">Niveau {stats.niveau}</span>
                   <span className="text-xs text-gold-soft">{stats.xp} XP</span>
                 </div>
-                <p className="mt-3 text-xs text-parch/50">Points de vie</p>
+                <div className="mt-3 flex items-center justify-between">
+                  <span className="text-xs text-parch/50">Points de vie</span>
+                  {pvDelta !== null && pvDelta !== 0 && (
+                    <span className={`text-xs font-semibold ${pvDelta < 0 ? 'text-red-400' : 'text-green-400'}`}>
+                      {pvDelta > 0 ? `+${pvDelta}` : pvDelta} PV
+                    </span>
+                  )}
+                </div>
                 <div className="mt-1 h-2 w-full overflow-hidden rounded-full bg-white/10">
-                  <div className="h-full bg-red-500" style={{ width: `${pvPct}%` }} />
+                  <div className="h-full bg-red-500 transition-all" style={{ width: `${pvPct}%` }} />
                 </div>
                 <p className="mt-1 text-xs text-parch/60">
                   {stats.pv_actuels} / {stats.pv_max}
@@ -188,6 +214,64 @@ export default function Game() {
               <p className="text-sm text-parch/40">Chargement…</p>
             )}
           </div>
+
+          {/* Inventaire */}
+          <div className="rounded-xl border border-white/10 bg-panel/50 p-4">
+            <h3 className="mb-2 text-sm text-white">Inventaire</h3>
+            {inventaire.length > 0 ? (
+              <ul className="space-y-1">
+                {inventaire.map((it) => (
+                  <li key={it.id_objet} className="flex items-center justify-between text-xs">
+                    <span className="text-parch/80">
+                      {it.nom}
+                      {it.quantite > 1 && <span className="text-parch/40"> ×{it.quantite}</span>}
+                      {it.equipe && <span className="ml-1 text-gold-soft">⚔</span>}
+                    </span>
+                    <span className="text-parch/40">{it.type_objet}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-xs text-parch/40">Sac vide.</p>
+            )}
+          </div>
+
+          {/* Quêtes */}
+          <div className="rounded-xl border border-white/10 bg-panel/50 p-4">
+            <h3 className="mb-2 text-sm text-white">Journal de quêtes</h3>
+            {quetes.length > 0 ? (
+              <ul className="space-y-2">
+                {quetes.map((q) => (
+                  <li
+                    key={q.id_quete}
+                    className={`rounded-lg border px-2 py-1.5 text-xs ${
+                      STATUT_QUETE[q.statut] ?? 'border-white/10 text-parch/70'
+                    }`}
+                  >
+                    <div className="font-medium">{q.titre}</div>
+                    {q.description && <div className="mt-0.5 opacity-70">{q.description}</div>}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-xs text-parch/40">Aucune quête en cours.</p>
+            )}
+          </div>
+
+          {/* PNJ rencontrés */}
+          {pnj.length > 0 && (
+            <div className="rounded-xl border border-white/10 bg-panel/50 p-4">
+              <h3 className="mb-2 text-sm text-white">Personnages rencontrés</h3>
+              <ul className="space-y-1">
+                {pnj.map((p) => (
+                  <li key={p.id_pnj} className="text-xs">
+                    <span className="text-parch/80">{p.nom}</span>
+                    {p.attitude && <span className="ml-1 text-parch/40">· {p.attitude}</span>}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </aside>
       </div>
     </div>

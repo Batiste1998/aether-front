@@ -90,8 +90,37 @@ export interface Tour {
   created_at: string
 }
 
+export interface Quete {
+  id_quete: number
+  titre: string
+  description: string | null
+  statut: string
+  recompense_xp: number
+  recompense_or: number
+}
+
+export interface Pnj {
+  id_pnj: number
+  nom: string
+  description: string | null
+  attitude: string | null
+}
+
+export interface InventaireItem {
+  id_objet: number
+  nom: string
+  type_objet: string
+  description: string | null
+  effet: string | null
+  quantite: number
+  equipe: boolean
+}
+
 export interface PartieDetail extends Partie {
   tours: Tour[]
+  quetes: Quete[]
+  pnj: Pnj[]
+  inventaire: InventaireItem[]
 }
 
 export interface De {
